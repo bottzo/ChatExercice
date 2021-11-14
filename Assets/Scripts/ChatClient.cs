@@ -154,7 +154,11 @@ public class ChatClient : MonoBehaviour
                     {
                         json = reader.ReadString();
                         if (json == "")
+                        {
+                            json = reader.ReadString();
+                            json = reader.ReadString();
                             break;
+                        }
 
                         Message msg = new Message();
                         msg = JsonUtility.FromJson<Message>(json);
@@ -168,6 +172,16 @@ public class ChatClient : MonoBehaviour
                                 break;
                             case Message.MessageType.ClientClientLeavedChat:
                                 OutputChat(msg.message + " disconected from the chat");
+                                break;
+                            case Message.MessageType.ClientNameAccepted:
+                                username = msg.message;
+                                break;
+                            case Message.MessageType.ClientNameRejected:
+                                OutputChat("Username " + msg.message + " rejected");
+                                OutputChat("Username already exists or it starts with /");
+                                break;
+                            case Message.MessageType.ClientChangedName:
+                                OutputChat("Username " + msg.message + " rejected");
                                 break;
                             default:
                                 break;
@@ -191,6 +205,7 @@ public class ChatClient : MonoBehaviour
     {
         //The endiannes???
         //chack with the poll if we can send the message: what happens if we can't????
+        message.senderName = username;
         string json = JsonUtility.ToJson(message);
         MemoryStream stream = new MemoryStream();
         BinaryWriter writer = new BinaryWriter(stream);
@@ -199,7 +214,6 @@ public class ChatClient : MonoBehaviour
         socket.Send(stream.GetBuffer());
         //socket.Send(Encoding.ASCII.GetBytes(json));
         IPEndPoint clientEndPoint = (IPEndPoint)socket.RemoteEndPoint;
-        Debug.Log("Sending message to client with address: " + clientEndPoint.Address + "and port: " + clientEndPoint.Port);
     }
     public void SendCommand()
     {
@@ -212,8 +226,26 @@ public class ChatClient : MonoBehaviour
                 msg.Type = Message.MessageType.ServerNameRequest;
             else
             {
-                msg.Type = Message.MessageType.ServerBroadcastMessageRequest;
-                msg.senderName = username;
+                //  Command
+                if (inputField.text.StartsWith("/"))
+                {
+                    if(inputField.text.StartsWith("/changeName"))
+                    {
+                        msg.Type = Message.MessageType.ServerNameRequest;
+                        if (inputField.text.Length < 13)
+                        {
+                            inputField.text = "";
+                            return;
+                        }
+                        inputField.text = inputField.text.Substring(12);
+                    }
+                }
+                //Regular message
+                else
+                {
+                    msg.Type = Message.MessageType.ServerBroadcastMessageRequest;
+                    msg.senderName = username;
+                }
             }
             msg.message = inputField.text;
             inputField.text = "";
@@ -227,7 +259,6 @@ public class ChatClient : MonoBehaviour
     }
     private void ConnectToserver()
     {
-        //Peta si no hi ha server!!!!!
         try
         {
             clientSocket.Connect(serverIpep);

@@ -15,6 +15,7 @@ public struct Message
         ClientNameAccepted,
         ClientNewClientOnChat,
         ClientClientLeavedChat,
+        ClientChangedName,
         ServerBroadcastMessageRequest,
         ClientBroadcastedMessage
     }
@@ -37,7 +38,7 @@ public class ChatServer : MonoBehaviour
     private class Client
     {
         public bool connected = false;
-        public string name;
+        public string name = "";
         public List<string> bannedClients;
         public Socket socket;
         //Color color
@@ -109,16 +110,23 @@ public class ChatServer : MonoBehaviour
                             {
                                 msg.Type = Message.MessageType.ClientNameAccepted;
                                 JSONSerializeAndSendMessage(msg, clients[i].socket);
-                                msg.Type = Message.MessageType.ClientNewClientOnChat;
+                                if (clients[i].name == "")
+                                {
+                                    msg.Type = Message.MessageType.ClientNewClientOnChat;
+                                    clients[i].connected = true;
+                                }
+                                else
+                                {
+                                    msg.Type = Message.MessageType.ClientChangedName;
+                                }
                                 msgsToBroadcast.Add(msg);
-                                clients[i].connected = true;
+                                clients[i].name = msg.message;
                             }
                             break;
                         default:
                             Debug.LogWarning("Received and unhandlable message type");
                             break;
                     }
-                    Debug.Log(msg.message);
                 }
             }
         }
