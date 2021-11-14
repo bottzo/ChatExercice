@@ -27,8 +27,10 @@ public class ChatClient : MonoBehaviour
     public InputField inputField;
     private Text placeHolderText;
     public Button inputButton;
-    bool serverNotActive = false;
-    object notActiveLock = new object();
+    private bool serverNotActive = false;
+    private object notActiveLock = new object();
+    private bool connectedToServer = false;
+    private object connectedToServerLock = new object();
     public float ReconectTime = 2.0f;
     private float currentReconnectTimer;
 
@@ -60,6 +62,7 @@ public class ChatClient : MonoBehaviour
                 break;
 
                 case ClientState.Connecting:
+                //If not succesfully conected with server try again later
                 lock (notActiveLock)
                 {
                     if(serverNotActive == true)
@@ -71,6 +74,12 @@ public class ChatClient : MonoBehaviour
                         OutputChat("Trying reconection in " + ReconectTime + " seconds");
                         break;
                     }
+                }
+                //If succesfully connected with server continue to request a name to the server
+                lock(connectedToServerLock)
+                {
+                    if (!connectedToServer)
+                        break;
                 }
                 if (clientSocket.Poll(0, SelectMode.SelectWrite))
                 {
@@ -92,12 +101,12 @@ public class ChatClient : MonoBehaviour
                     {
                         OutputChat("Lost Connection to server");
                         state = ClientState.Disconected;
+                        connectedToServer = false;
                         break;
                     }
                     MemoryStream stream = new MemoryStream(data);
                     BinaryReader reader = new BinaryReader(stream);
                     string json;
-                    //string json = Encoding.ASCII.GetString(data, 0, recv);
                     while (true)
                     {
                         json = reader.ReadString();
@@ -135,12 +144,12 @@ public class ChatClient : MonoBehaviour
                     {
                         OutputChat("Lost Connection to server");
                         state = ClientState.Disconected;
+                        connectedToServer = false;
                         break;
                     }
                     MemoryStream stream = new MemoryStream(data);
                     BinaryReader reader = new BinaryReader(stream);
                     string json;
-                    //string json = Encoding.ASCII.GetString(data, 0, recv);
                     while (true)
                     {
                         json = reader.ReadString();
@@ -194,7 +203,7 @@ public class ChatClient : MonoBehaviour
     }
     public void SendCommand()
     {
-        if (inputField.text == "")
+        if (!connectedToServer || inputField.text == "")
             return;
         if(clientSocket.Poll(0,SelectMode.SelectWrite))
         {
@@ -222,6 +231,10 @@ public class ChatClient : MonoBehaviour
         try
         {
             clientSocket.Connect(serverIpep);
+            lock (connectedToServerLock)
+            {
+                connectedToServer = true;
+            }
         }
         catch(SocketException e)
         {
@@ -234,7 +247,6 @@ public class ChatClient : MonoBehaviour
                 }
             }
         }
-        int a = 3;
     }
     private void OutputChat(string output, string sender = "")
     {
