@@ -33,6 +33,8 @@ public class ChatClient : MonoBehaviour
     private object connectedToServerLock = new object();
     public float ReconectTime = 2.0f;
     private float currentReconnectTimer;
+    private string chatHelp = "Chat Help: " + System.Environment.NewLine + "Send without /: seanding a broadcast message to all the chat" + System.Environment.NewLine + "Commands(prefixed with /): " + System.Environment.NewLine +
+    "[/help]: :)" + System.Environment.NewLine + "[/list]: displays all users connected to the chat" + System.Environment.NewLine + "[/changeName newname]: to change your username" + System.Environment.NewLine + "[/whisper receivername : message]: to send a private message";
 
     private void Start()
     {
@@ -127,7 +129,7 @@ public class ChatClient : MonoBehaviour
                         else if (msg.Type == Message.MessageType.ClientNameRejected)
                         {
                             OutputChat("Username " + msg.message + " rejected");
-                            OutputChat("Username already exists or it starts with /");
+                            OutputChat("Username already exists or it starts with / or contains :");
                             OutputChat("Try another name");
                             placeHolderText.text = "Enter another Username";
                         }
@@ -150,13 +152,12 @@ public class ChatClient : MonoBehaviour
                     MemoryStream stream = new MemoryStream(data);
                     BinaryReader reader = new BinaryReader(stream);
                     string json;
+                    //While loop to check if there are more messages afterwards
                     while (true)
                     {
                         json = reader.ReadString();
                         if (json == "")
                         {
-                            json = reader.ReadString();
-                            json = reader.ReadString();
                             break;
                         }
 
@@ -178,10 +179,19 @@ public class ChatClient : MonoBehaviour
                                 break;
                             case Message.MessageType.ClientNameRejected:
                                 OutputChat("Username " + msg.message + " rejected");
-                                OutputChat("Username already exists or it starts with /");
+                                OutputChat("Username already exists or it starts with / or contains :");
                                 break;
                             case Message.MessageType.ClientChangedName:
                                 OutputChat("Username " + msg.message + " rejected");
+                                break;
+                            case Message.MessageType.ClientPrivateReceiverNoExists:
+                                OutputChat("Username " + msg.receiverName + " doesn't exist");
+                                break;
+                            case Message.MessageType.ClientReceivedPrivateMessage:
+                                OutputChat(msg.message, msg.senderName, true);
+                                break;
+                            case Message.MessageType.ClientUsernamesConnected:
+                                OutputChat(msg.message);
                                 break;
                             default:
                                 break;
@@ -203,16 +213,12 @@ public class ChatClient : MonoBehaviour
     }
     private void JSONSerializeAndSendMessage(Message message, Socket socket)
     {
-        //The endiannes???
-        //chack with the poll if we can send the message: what happens if we can't????
         message.senderName = username;
         string json = JsonUtility.ToJson(message);
         MemoryStream stream = new MemoryStream();
         BinaryWriter writer = new BinaryWriter(stream);
         writer.Write(json);
-        //Encoding.UTF8.GetBytes(json)
         socket.Send(stream.GetBuffer());
-        //socket.Send(Encoding.ASCII.GetBytes(json));
         IPEndPoint clientEndPoint = (IPEndPoint)socket.RemoteEndPoint;
     }
     public void SendCommand()
@@ -238,6 +244,35 @@ public class ChatClient : MonoBehaviour
                             return;
                         }
                         inputField.text = inputField.text.Substring(12);
+                    }
+                    else if(inputField.text.StartsWith("/whisper"))
+                    {
+                        msg.Type = Message.MessageType.ServerSendPrivateMessage;
+                        if (inputField.text.Length < 10 || !inputField.text.Contains(":"))
+                        {
+                            inputField.text = "";
+                            return;
+                        }
+                        inputField.text = inputField.text.Substring(9);
+                        msg.senderName = username;
+                        msg.receiverName = inputField.text.Remove(inputField.text.IndexOf(":"));
+                        inputField.text = inputField.text.Substring(inputField.text.IndexOf(":") + 1);
+                    }
+                    else if (inputField.text.StartsWith("/list"))
+                    {
+                        msg.Type = Message.MessageType.ServerUsernamesConnected;
+                        inputField.text = "";
+                    }
+                    else if (inputField.text.StartsWith("/help"))
+                    {
+                        OutputChat(chatHelp);
+                        inputField.text = "";
+                        return;
+                    }
+                    else
+                    {
+                        inputField.text = "";
+                        return;
                     }
                 }
                 //Regular message
@@ -279,8 +314,10 @@ public class ChatClient : MonoBehaviour
             }
         }
     }
-    private void OutputChat(string output, string sender = "")
+    private void OutputChat(string output, string sender = "", bool direct = false)
     {
+        if (direct)
+            outputLog.text += "[PRIVATE]";
         if (sender != "")
             outputLog.text += sender + ": ";
         outputLog.text += output + System.Environment.NewLine;

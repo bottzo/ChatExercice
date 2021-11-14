@@ -16,11 +16,17 @@ public struct Message
         ClientNewClientOnChat,
         ClientClientLeavedChat,
         ClientChangedName,
+        ServerSendPrivateMessage,
+        ClientReceivedPrivateMessage,
+        ClientPrivateReceiverNoExists,
         ServerBroadcastMessageRequest,
-        ClientBroadcastedMessage
+        ClientBroadcastedMessage,
+        ServerUsernamesConnected,
+        ClientUsernamesConnected
     }
     public MessageType Type;
     public string senderName;
+    public string receiverName;
     //public System.DateTime date;
     //Color color 
     public string message;
@@ -101,7 +107,7 @@ public class ChatServer : MonoBehaviour
                             msgsToBroadcast.Add(msg);
                             break;
                         case Message.MessageType.ServerNameRequest:
-                            if (msg.message.StartsWith("/") || UserNameInUse(msg.message))
+                            if (msg.message.StartsWith("/") || msg.message.Contains(":") || UserNameInUse(msg.message))
                             {
                                 msg.Type = Message.MessageType.ClientNameRejected;
                                 JSONSerializeAndSendMessage(msg, clients[i].socket);
@@ -123,6 +129,24 @@ public class ChatServer : MonoBehaviour
                                 clients[i].name = msg.message;
                             }
                             break;
+                        case Message.MessageType.ServerSendPrivateMessage:
+                            Client receiver = GetClientByUserName(msg.receiverName);
+                            if (receiver != null)
+                            {
+                                msg.Type = Message.MessageType.ClientReceivedPrivateMessage;
+                                JSONSerializeAndSendMessage(msg, receiver.socket);
+                            }
+                            else
+                            {
+                                msg.Type = Message.MessageType.ClientPrivateReceiverNoExists;
+                                JSONSerializeAndSendMessage(msg, clients[i].socket);
+                            }
+                            break;
+                        case Message.MessageType.ServerUsernamesConnected:
+                            msg.Type = Message.MessageType.ClientUsernamesConnected;
+                            msg.message = GetConnectedClientsList();
+                            JSONSerializeAndSendMessage(msg, clients[i].socket);
+                            break;
                         default:
                             Debug.LogWarning("Received and unhandlable message type");
                             break;
@@ -138,7 +162,6 @@ public class ChatServer : MonoBehaviour
                 {
                     foreach (Message msg in msgsToBroadcast)
                     {
-                        //What if we fail here unable to send the message because of the poll???
                         //look here for the banned clients
                         if (client.socket.Poll(0, SelectMode.SelectWrite))
                             JSONSerializeAndSendMessage(msg, client.socket);
@@ -170,11 +193,44 @@ public class ChatServer : MonoBehaviour
 
     private bool UserNameInUse(string name)
     {
+        if (name == "")
+            return true;
         foreach (Client client in clients)
         {
             if (client.name == name)
                 return true;
         }
         return false;
+    }
+    private Client GetClientByUserName(string name)
+    {
+        if (name == "")
+            return null;
+        foreach (Client client in clients)
+        {
+            if (client.name == name)
+                return client;
+        }
+        return null;
+    }
+    private string GetConnectedClientsList()
+    {
+        string connected = "Users: ";
+        int count = 0;
+        foreach (Client client in clients)
+        {
+            if (client.connected)
+            {
+                connected += client.name + " // ";
+                ++count;
+                if (count >= 11)
+                {
+                    connected += System.Environment.NewLine;
+                    count = 0;
+                }
+
+            }
+        }
+        return connected;
     }
 }
