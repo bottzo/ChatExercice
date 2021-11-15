@@ -182,7 +182,7 @@ public class ChatClient : MonoBehaviour
                                 OutputChat("Username already exists or it starts with / or contains :");
                                 break;
                             case Message.MessageType.ClientChangedName:
-                                OutputChat("Username " + msg.message + " rejected");
+                                OutputChat("Username " + msg.senderName + " changed name to " + msg.message);
                                 break;
                             case Message.MessageType.ClientPrivateReceiverNoExists:
                                 OutputChat("Username " + msg.receiverName + " doesn't exist");
